@@ -171,9 +171,9 @@ const Navbar = () => {
               <BadgeCheck size={18} />
               <span>Our Story</span>
             </a>
-            <a href="#why-us" className="flex items-center space-x-2 text-gray-700 font-semibold hover:text-secondary">
+            <a href="#faq" className="flex items-center space-x-2 text-gray-700 font-semibold hover:text-secondary">
               <Star size={18} />
-              <span>Why Choose Us</span>
+              <span>FAQ</span>
             </a>
             <Link to="/blogs" className="flex items-center space-x-2 text-gray-700 font-semibold hover:text-secondary">
               <BookOpenText size={18} />
@@ -229,7 +229,7 @@ const Navbar = () => {
                 <Link to="/signup" className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90">
                   Sign Up
                 </Link>
-                <Link to="/login" className="px-5 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-secondary hover:text-white">
+                <Link to="/login" className="px-5 py-2 text-sm font-medium text-primary border border-primary rounded-md  ">
                   Login
                 </Link>
               </>

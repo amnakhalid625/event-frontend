@@ -13,7 +13,7 @@ const Footer = () => {
               Digital solutions for business growth and success.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-500 hover:text-blue-600 transition">
+              <a href="#" className="text-gray-500 hover:text-secondary transition">
                 <Facebook className="h-5 w-5" />
               </a>
               <a href="#" className="text-gray-500 hover:text-pink-600 transition">
@@ -36,7 +36,7 @@ const Footer = () => {
                 'FAQ'
               ].map((item) => (
                 <li key={item}>
-                  <Link to="#" className="text-gray-600 hover:text-blue-600 transition">{item}</Link>
+                  <Link to="#" className="text-gray-600 hover:text-secondary transition">{item}</Link>
                 </li>
               ))}
             </ul>
@@ -68,9 +68,9 @@ const Footer = () => {
             © {new Date().getFullYear()} Kaboozat. All rights reserved.
           </p>
           <div className="flex justify-center space-x-4 mt-2 text-sm text-gray-500">
-            <Link to="#" className="hover:text-blue-600 transition">Privacy</Link>
+            <Link to="#" className="hover:text-secondary transition">Privacy</Link>
             <span>•</span>
-            <Link to="#" className="hover:text-blue-600 transition">Terms</Link>
+            <Link to="#" className="hover:text-secondary transition">Terms</Link>
           </div>
         </div>
       </div>
