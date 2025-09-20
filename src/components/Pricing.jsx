@@ -84,37 +84,40 @@ const Pricing = () => {
   return (
     <section className="py-16 bg-gray-50 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
+        {/* Heading */}
         <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-secondary  mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-secondary mb-4">
             Simple, Transparent Pricing
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Choose the plan that works best for your business. All plans include a 14-day free trial.
           </p>
-          
-         
         </div>
 
+        {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {plans.map((plan, index) => (
-            <div 
+            <div
               key={index}
-              className={`relative rounded-xl overflow-hidden border ${
-                plan.highlighted 
-                  ? 'border-secondary bg-blue-50 shadow-lg transform scale-105' 
-                  : plan.custom 
-                  ? 'border-dashed border-2 border-secondary bg-white shadow-md flex flex-col justify-center items-center cursor-pointer hover:bg-blue-50 transition-colors'
-                  : 'border border-gray-200 bg-white shadow-md'
-              }`}
+              className={`relative rounded-xl overflow-hidden border transition-all duration-300 
+                ${plan.highlighted
+                  ? 'border-secondary bg-white scale-105'
+                  : plan.custom
+                  ? 'border-dashed border-2 border-secondary bg-white cursor-pointer hover:bg-gray-50'
+                  : 'border-gray-200 bg-white hover:border-secondary'
+                }`}
               onClick={plan.custom ? handleCustomPlanClick : undefined}
             >
+              {/* Popular Ribbon */}
               {plan.popular && (
                 <div className="absolute top-0 left-0 right-0 bg-secondary text-white text-center py-2 text-sm font-semibold">
                   MOST POPULAR
                 </div>
               )}
-              
+
+              {/* Card Body */}
               <div className={`p-6 ${plan.popular ? 'pt-16' : 'pt-8'} ${plan.custom ? 'flex flex-col items-center justify-center h-full' : ''}`}>
+                {/* Custom Plan */}
                 {plan.custom ? (
                   <>
                     <div className="bg-blue-100 p-4 rounded-full mb-4">
@@ -135,31 +138,37 @@ const Pricing = () => {
                       {plan.name}
                     </h3>
                     <p className={`mb-6 ${plan.highlighted ? 'text-secondary' : 'text-gray-600'}`}>{plan.description}</p>
-                    
+
                     <div className="mb-6">
                       <span className={`text-4xl font-bold ${plan.highlighted ? 'text-secondary' : 'text-gray-900'}`}>
                         ${billingCycle === 'monthly' ? plan.monthlyPrice : plan.annualPrice}
                       </span>
-                      <span className={plan.highlighted ? 'text-secondary' : 'text-gray-600'}>/{billingCycle === 'monthly' ? 'month' : 'year'}</span>
+                      <span className={plan.highlighted ? 'text-secondary' : 'text-gray-600'}>
+                        /{billingCycle === 'monthly' ? 'month' : 'year'}
+                      </span>
                     </div>
                   </>
                 )}
-                
+
+                {/* CTA Button */}
                 {!plan.custom && (
                   <button
-                    className={`w-full py-3 rounded-lg font-semibold ${
-                      plan.highlighted
+                    className={`w-full py-3 rounded-lg font-semibold transition-colors duration-200 
+                      ${plan.highlighted
                         ? 'bg-secondary hover:bg-primary text-white'
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                    } transition-colors duration-200`}
+                      }`}
                   >
                     Try Plan
                   </button>
                 )}
-                
+
+                {/* Features / Limitations */}
                 {!plan.custom ? (
                   <div className={`mt-8 ${plan.highlighted ? 'text-secondary' : ''}`}>
-                    <h4 className={`font-semibold mb-4 ${plan.highlighted ? 'text-secondary' : 'text-gray-900'}`}>What's included:</h4>
+                    <h4 className={`font-semibold mb-4 ${plan.highlighted ? 'text-secondary' : 'text-gray-900'}`}>
+                      What's included:
+                    </h4>
                     <ul className="space-y-3">
                       {plan.features.map((feature, idx) => (
                         <li key={idx} className="flex items-start">
@@ -168,15 +177,15 @@ const Pricing = () => {
                         </li>
                       ))}
                     </ul>
-                    
+
                     {plan.limitations && plan.limitations.length > 0 && (
                       <>
-                        <h4 className={`font-semibold mt-6 mb-4 ${plan.highlighted ? 'text-blue-700' : 'text-gray-900'}`}>Limitations:</h4>
+                        <h4 className="font-semibold mt-6 mb-4 text-red-600">Limitations:</h4>
                         <ul className="space-y-3">
                           {plan.limitations.map((limitation, idx) => (
                             <li key={idx} className="flex items-start">
-                              <X className={`h-5 w-5 mt-0.5 mr-3 flex-shrink-0 ${plan.highlighted ? 'text-red-400' : 'text-red-500'}`} />
-                              <span className={plan.highlighted ? 'text-secondary' : 'text-gray-700'}>{limitation}</span>
+                              <X className="h-5 w-5 mt-0.5 mr-3 flex-shrink-0 text-red-500" />
+                              <span className="text-gray-700">{limitation}</span>
                             </li>
                           ))}
                         </ul>
@@ -190,8 +199,6 @@ const Pricing = () => {
             </div>
           ))}
         </div>
-
-        
       </div>
     </section>
   );

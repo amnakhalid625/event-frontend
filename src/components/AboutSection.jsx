@@ -14,7 +14,7 @@ export default function AboutSection() {
             className="rounded-2xl overflow-hidden shadow-lg"
           >
             <img
-              src="/public/about.jpg"
+              src="/about.jpg"
               alt="About Us"
               className="w-full h-[400px] object-cover"
             />
