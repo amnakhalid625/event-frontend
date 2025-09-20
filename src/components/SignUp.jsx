@@ -38,7 +38,7 @@ const Signup = () => {
     setIsSubmitting(true);
 
     try {
-      await axios.post("https://event-backend-new.vercel.app/api/auth/register", {
+      await axios.post("https://event-backend-latest.vercel.app/api/auth/register", {
         fullName: name,
         email,
         password,
