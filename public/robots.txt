@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://Karoozat.com/sitemap.xml
