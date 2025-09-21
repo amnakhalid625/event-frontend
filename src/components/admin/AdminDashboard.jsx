@@ -22,6 +22,10 @@ const AdminDashboard = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dashboardStats, setDashboardStats] = useState({});
+
+  // Get API base URL
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // Check authentication and load data
   useEffect(() => {
@@ -41,50 +45,79 @@ const AdminDashboard = () => {
     }
 
     setCurrentUser(user);
-    loadPublisherRequests();
+    loadDashboardData();
   }, []);
 
-  // Load all publisher requests
-  const loadPublisherRequests = async () => {
+  // Load dashboard stats and requests from API
+  const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // For now, load from localStorage (later will be API call)
-      const allRequests = JSON.parse(localStorage.getItem("all_publisher_requests") || "[]");
-      setPublisherRequests(allRequests);
+      const token = localStorage.getItem("token");
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Load dashboard stats
+      const statsResponse = await fetch(`${API_BASE_URL}/admin/dashboard-stats`, {
+        headers
+      });
+      
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setDashboardStats(statsData);
+      }
+
+      // Load publisher requests
+      const requestsResponse = await fetch(`${API_BASE_URL}/admin/publisher-requests?limit=100`, {
+        headers
+      });
+      
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        setPublisherRequests(requestsData.requests || []);
+      } else {
+        throw new Error('Failed to load requests');
+      }
     } catch (error) {
-      alert("Failed to load requests");
+      console.error('Error loading dashboard data:', error);
+      alert("Failed to load dashboard data. Please check your connection.");
     } finally {
       setLoading(false);
     }
   };
 
- 
-
-  // Approve request
+  // Approve request via API
   const approveRequest = async (requestId) => {
     try {
-      const updatedRequests = publisherRequests.map(req => 
-        req.id === requestId 
-          ? { 
-              ...req, 
-              status: "approved", 
-              approvedBy: currentUser.id,
-              approvalDate: new Date().toISOString(),
-              reviewedAt: new Date().toISOString()
-            }
-          : req
-      );
-      
-      localStorage.setItem("all_publisher_requests", JSON.stringify(updatedRequests));
-      setPublisherRequests(updatedRequests);
-      setShowModal(false);
-      alert("Publisher request approved successfully!");
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/admin/publisher-requests/${requestId}/approve`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          adminNotes: "Approved from dashboard"
+        })
+      });
+
+      if (response.ok) {
+        alert("Publisher request approved successfully!");
+        setShowModal(false);
+        // Reload data to get updated status
+        loadDashboardData();
+      } else {
+        const error = await response.json();
+        alert(error.message || "Failed to approve request");
+      }
     } catch (error) {
+      console.error('Error approving request:', error);
       alert("Failed to approve request");
     }
   };
 
-  // Reject request
+  // Reject request via API
   const rejectRequest = async (requestId) => {
     if (!rejectionReason.trim()) {
       alert("Please provide a rejection reason");
@@ -92,24 +125,31 @@ const AdminDashboard = () => {
     }
 
     try {
-      const updatedRequests = publisherRequests.map(req => 
-        req.id === requestId 
-          ? { 
-              ...req, 
-              status: "rejected", 
-              rejectionReason: rejectionReason,
-              reviewedBy: currentUser.id,
-              reviewedAt: new Date().toISOString()
-            }
-          : req
-      );
-      
-      localStorage.setItem("all_publisher_requests", JSON.stringify(updatedRequests));
-      setPublisherRequests(updatedRequests);
-      setShowModal(false);
-      setRejectionReason("");
-      alert("Publisher request rejected");
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/admin/publisher-requests/${requestId}/reject`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          rejectionReason: rejectionReason,
+          adminNotes: "Rejected from dashboard"
+        })
+      });
+
+      if (response.ok) {
+        alert("Publisher request rejected");
+        setShowModal(false);
+        setRejectionReason("");
+        // Reload data to get updated status
+        loadDashboardData();
+      } else {
+        const error = await response.json();
+        alert(error.message || "Failed to reject request");
+      }
     } catch (error) {
+      console.error('Error rejecting request:', error);
       alert("Failed to reject request");
     }
   };
@@ -123,9 +163,10 @@ const AdminDashboard = () => {
 
   // Filter requests
   const filteredRequests = publisherRequests.filter(req => {
-    const matchesSearch = req.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         req.publisherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         req.website.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (req.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (req.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (req.website || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (req.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === "all" || req.status === statusFilter;
     
@@ -146,13 +187,13 @@ const AdminDashboard = () => {
     }
   };
 
-  // Calculate stats
-  const stats = {
+  // Calculate stats from API data or local data
+  const stats = dashboardStats.stats || {
     total: publisherRequests.length,
     pending: publisherRequests.filter(req => req.status === "pending").length,
     approved: publisherRequests.filter(req => req.status === "approved").length,
     rejected: publisherRequests.filter(req => req.status === "rejected").length,
-    totalTraffic: publisherRequests.reduce((sum, req) => sum + (req.websiteAnalysis?.trafficData?.monthlyVisits || 0), 0)
+    totalTraffic: publisherRequests.reduce((sum, req) => sum + (req.websiteAnalysis?.monthlyTraffic || 0), 0)
   };
 
   if (!currentUser) {
@@ -179,7 +220,12 @@ const AdminDashboard = () => {
             <div className="text-sm bg-red-700 px-3 py-1 rounded">
               {stats.pending} Pending Requests
             </div>
-          
+            <button
+              onClick={loadDashboardData}
+              className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm"
+            >
+              Refresh Data
+            </button>
           </div>
         </div>
       </header>
@@ -321,7 +367,7 @@ const AdminDashboard = () => {
             ) : (
               <div className="space-y-4">
                 {getRequestsByTab().map((request) => (
-                  <div key={request.id} className="border rounded-lg p-6 hover:shadow-md transition">
+                  <div key={request._id} className="border rounded-lg p-6 hover:shadow-md transition">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-4">
@@ -342,7 +388,7 @@ const AdminDashboard = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                           <div>
                             <p className="text-sm font-medium text-gray-500">Publisher</p>
-                            <p className="text-sm text-gray-900">{request.publisherName}</p>
+                            <p className="text-sm text-gray-900">{request.fullName}</p>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-500">Website</p>
@@ -366,25 +412,25 @@ const AdminDashboard = () => {
                             <div className="bg-gray-50 p-3 rounded">
                               <p className="text-xs text-gray-500">Monthly Traffic</p>
                               <p className="font-semibold">
-                                {formatNumber(request.websiteAnalysis.trafficData?.monthlyVisits || 0)}
+                                {formatNumber(request.websiteAnalysis.monthlyTraffic || 0)}
                               </p>
                             </div>
                             <div className="bg-gray-50 p-3 rounded">
                               <p className="text-xs text-gray-500">Domain Authority</p>
                               <p className="font-semibold">
-                                {request.domainAuthority || request.websiteAnalysis.seoMetrics?.domainAuthority || 'N/A'}
+                                {request.domainAuthority || request.websiteAnalysis.domainAuthority || 'N/A'}
                               </p>
                             </div>
                             <div className="bg-gray-50 p-3 rounded">
                               <p className="text-xs text-gray-500">Trust Score</p>
                               <p className="font-semibold">
-                                {request.websiteAnalysis.analysis?.trustScore || 0}/100
+                                {request.websiteAnalysis.trustScore || 0}/100
                               </p>
                             </div>
                             <div className="bg-gray-50 p-3 rounded">
                               <p className="text-xs text-gray-500">Price</p>
                               <p className="font-semibold text-green-600">
-                                ${request.standardPostPrice}
+                                ${request.pricing?.standardPostPrice || 'N/A'}
                               </p>
                             </div>
                           </div>
@@ -440,7 +486,7 @@ const AdminDashboard = () => {
                   <h3 className="font-semibold mb-3">Publisher Information</h3>
                   <div className="space-y-2 text-sm">
                     <p><span className="font-medium">Company:</span> {selectedRequest.companyName}</p>
-                    <p><span className="font-medium">Publisher:</span> {selectedRequest.publisherName}</p>
+                    <p><span className="font-medium">Publisher:</span> {selectedRequest.fullName}</p>
                     <p><span className="font-medium">Email:</span> {selectedRequest.email}</p>
                     <p><span className="font-medium">Phone:</span> {selectedRequest.phone}</p>
                     <p><span className="font-medium">Website:</span> 
@@ -448,6 +494,7 @@ const AdminDashboard = () => {
                         {selectedRequest.website}
                       </a>
                     </p>
+                    <p><span className="font-medium">Address:</span> {selectedRequest.address}</p>
                   </div>
                 </div>
 
@@ -458,25 +505,25 @@ const AdminDashboard = () => {
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-xs text-gray-500">Monthly Traffic</p>
                         <p className="font-semibold">
-                          {formatNumber(selectedRequest.websiteAnalysis.trafficData?.monthlyVisits || 0)}
+                          {formatNumber(selectedRequest.websiteAnalysis.monthlyTraffic || 0)}
                         </p>
                       </div>
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-xs text-gray-500">Domain Authority</p>
                         <p className="font-semibold">
-                          {selectedRequest.domainAuthority || 'N/A'}
+                          {selectedRequest.domainAuthority || selectedRequest.websiteAnalysis.domainAuthority || 'N/A'}
                         </p>
                       </div>
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-xs text-gray-500">Trust Score</p>
                         <p className="font-semibold">
-                          {selectedRequest.websiteAnalysis.analysis?.trustScore || 0}/100
+                          {selectedRequest.websiteAnalysis.trustScore || 0}/100
                         </p>
                       </div>
                       <div className="bg-gray-50 p-3 rounded">
                         <p className="text-xs text-gray-500">Standard Price</p>
                         <p className="font-semibold text-green-600">
-                          ${selectedRequest.standardPostPrice}
+                          ${selectedRequest.pricing?.standardPostPrice || 'N/A'}
                         </p>
                       </div>
                     </div>
@@ -515,14 +562,14 @@ const AdminDashboard = () => {
                     
                     <div className="flex justify-end space-x-3">
                       <button
-                        onClick={() => rejectRequest(selectedRequest.id)}
+                        onClick={() => rejectRequest(selectedRequest._id)}
                         disabled={!rejectionReason.trim()}
                         className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         Reject Request
                       </button>
                       <button
-                        onClick={() => approveRequest(selectedRequest.id)}
+                        onClick={() => approveRequest(selectedRequest._id)}
                         className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700"
                       >
                         Approve Request
