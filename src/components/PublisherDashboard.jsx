@@ -11,6 +11,9 @@ const SimplePublisherDashboard = () => {
   const [websiteVerification, setWebsiteVerification] = useState({});
   const [toast, setToast] = useState({ show: false, message: "", type: "" });
   
+  // API Base URL
+  const API_BASE_URL = 'https://event-backend-eu68.vercel.app/api';
+  
   // Show toast notification
   const showToast = (message, type = "success") => {
     setToast({ show: true, message, type });
@@ -54,6 +57,7 @@ const SimplePublisherDashboard = () => {
   const [formData, setFormData] = useState({
     publisherName: "",
     email: "",
+    password: "",
     companyName: "",
     website: "",
     category: "",
@@ -97,13 +101,6 @@ const SimplePublisherDashboard = () => {
     }
 
     const user = JSON.parse(userData);
-    
-    // Check if user is a publisher
-    if (user.role !== "publisher") {
-      navigate("/login");
-      return;
-    }
-
     setCurrentUser(user);
     
     // Pre-fill form with user data
@@ -113,29 +110,32 @@ const SimplePublisherDashboard = () => {
       email: user.email || ""
     }));
     
-    // Load user's requests
-    loadUserRequests(user.id);
+    // Load user's requests from API
+    loadUserRequests();
   }, [navigate]);
 
-  // Load requests specific to current user
-  const loadUserRequests = (userId) => {
-    const allRequests = JSON.parse(localStorage.getItem("all_publisher_requests") || "[]");
-    const userRequests = allRequests.filter(req => req.userId === userId);
-    setRequests(userRequests);
-  };
+  // Load requests from API
+  const loadUserRequests = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
 
-  // Save requests with user isolation
-  const saveUserRequests = (userRequests) => {
-    const allRequests = JSON.parse(localStorage.getItem("all_publisher_requests") || "[]");
-    
-    // Remove current user's old requests
-    const otherUserRequests = allRequests.filter(req => req.userId !== currentUser.id);
-    
-    // Add current user's updated requests
-    const updatedAllRequests = [...otherUserRequests, ...userRequests];
-    
-    localStorage.setItem("all_publisher_requests", JSON.stringify(updatedAllRequests));
-    setRequests(userRequests);
+      const response = await fetch(`${API_BASE_URL}/publisher/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRequests(data || []);
+      } else {
+        console.error('Failed to load requests');
+      }
+    } catch (error) {
+      console.error('Error loading requests:', error);
+    }
   };
 
   // Handle input changes
@@ -179,130 +179,99 @@ const SimplePublisherDashboard = () => {
     }, 1000);
   };
 
-  // Generate mock analytics data
-  const generateAnalytics = (website, socialMedia, audienceSize, userMetrics) => {
-    const baseTraffic = userMetrics.monthlyTrafficAhrefs || Math.floor(Math.random() * 50000) + 1000;
-    const socialFollowers = Object.values(socialMedia).filter(url => url).length * 
-                           Math.floor(Math.random() * 5000) + 500;
-    
-    return {
-      websiteInfo: {
-        title: `${formData.companyName} - Official Website`,
-        description: `${formData.category} website with quality content`,
-        hasAnalytics: Math.random() > 0.3
-      },
-      trafficData: {
-        monthlyVisits: baseTraffic,
-        estimatedTraffic: baseTraffic,
-        ahrefsTraffic: userMetrics.monthlyTrafficAhrefs || baseTraffic
-      },
-      seoMetrics: {
-        domainAuthority: userMetrics.domainAuthority || Math.floor(Math.random() * 30) + 20,
-        pageAuthority: userMetrics.pageAuthority || Math.floor(Math.random() * 25) + 15,
-        topTrafficCountry: userMetrics.topTrafficCountry || "United States"
-      },
-      socialData: Object.fromEntries(
-        Object.entries(socialMedia)
-          .filter(([_, url]) => url)
-          .map(([platform, url]) => [
-            platform, 
-            { 
-              followers: Math.floor(Math.random() * 10000) + 100,
-              url 
-            }
-          ])
-      ),
-      totalAudience: baseTraffic + socialFollowers + parseInt(audienceSize || 0),
-      analysis: {
-        trustScore: Math.floor(Math.random() * 40) + 50,
-        category: formData.category,
-        grayNiches: formData.grayNiches,
-        lastAnalyzed: new Date()
-      }
-    };
-  };
-
-  // Submit Publisher Request
+  // Submit Publisher Request via API
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      // Generate analytics
-      const analytics = generateAnalytics(
-        formData.website, 
-        formData.socialMedia, 
-        formData.audienceSize,
-        {
-          domainAuthority: formData.domainAuthority,
-          pageAuthority: formData.pageAuthority,
-          monthlyTrafficAhrefs: formData.monthlyTrafficAhrefs,
-          topTrafficCountry: formData.topTrafficCountry
-        }
-      );
-      
-      // Create new request with user ID
-      const newRequest = {
-        id: Date.now(),
-        userId: currentUser.id, // Associate with current user
-        ...formData,
-        status: "pending",
-        websiteAnalysis: analytics,
-        createdAt: new Date().toISOString(),
-        analyticsSummary: {
-          totalAudience: analytics.totalAudience,
-          trustLevel: analytics.analysis.trustScore >= 70 ? 'High' : 
-                     analytics.analysis.trustScore >= 50 ? 'Medium' : 'Low',
-          hasVerifiedData: analytics.websiteInfo.hasAnalytics,
-          priceRange: formData.grayNichePrice && formData.grayNichePrice !== formData.standardPostPrice
-            ? `$${formData.standardPostPrice} - $${formData.grayNichePrice}`
-            : `$${formData.standardPostPrice}`
-        }
-      };
-      
-      // Add to user's requests
-      const updatedRequests = [newRequest, ...requests];
-      saveUserRequests(updatedRequests);
-      
-      // Show success message with toast
-      showToast(`Publisher Request Submitted Successfully!`, "success");
-      
-      // Reset form (but keep user details)
-      setFormData({
-        publisherName: currentUser.fullName || "",
-        email: currentUser.email || "",
-        companyName: "",
-        website: "",
-        category: "",
-        audienceSize: "",
-        phone: "",
-        address: "",
-        domainAuthority: "",
-        pageAuthority: "",
-        monthlyTrafficAhrefs: "",
-        topTrafficCountry: "",
-        grayNiches: [],
-        standardPostPrice: "",
-        grayNichePrice: "",
-        dofollowAllowed: true,
-        nofollowAllowed: true,
-        postSampleUrl: "",
-        contentGuidelines: "",
-        additionalNotes: "",
-        socialMedia: {
-          facebook: "",
-          instagram: "",
-          twitter: "",
-          youtube: "",
-          linkedin: ""
-        }
+      // Validate required fields
+      if (!formData.publisherName || !formData.email || !formData.password || 
+          !formData.companyName || !formData.website || !formData.category ||
+          !formData.standardPostPrice) {
+        showToast("Please fill all required fields", "error");
+        return;
+      }
+
+      // Call backend API
+      const response = await fetch(`${API_BASE_URL}/publisher/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fullName: formData.publisherName,
+          email: formData.email,
+          password: formData.password,
+          companyName: formData.companyName,
+          website: formData.website,
+          category: formData.category,
+          audienceSize: parseInt(formData.audienceSize) || 0,
+          phone: formData.phone,
+          address: formData.address,
+          domainAuthority: parseInt(formData.domainAuthority) || 0,
+          pageAuthority: parseInt(formData.pageAuthority) || 0,
+          monthlyTrafficAhrefs: parseInt(formData.monthlyTrafficAhrefs) || 0,
+          topTrafficCountry: formData.topTrafficCountry,
+          pricing: {
+            standardPostPrice: parseFloat(formData.standardPostPrice) || 0,
+            grayNichePrice: parseFloat(formData.grayNichePrice) || 0
+          },
+          grayNiches: formData.grayNiches || [],
+          socialMedia: formData.socialMedia || {}
+        })
       });
-      setWebsiteVerification({});
-      
-      // Switch to requests tab
-      setActiveTab("requests");
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Request submitted:', data);
+        showToast("Publisher request submitted successfully! Please wait for admin approval.", "success");
+        
+        // Reset form but keep user details
+        setFormData({
+          publisherName: currentUser.fullName || "",
+          email: currentUser.email || "",
+          password: "",
+          companyName: "",
+          website: "",
+          category: "",
+          audienceSize: "",
+          phone: "",
+          address: "",
+          domainAuthority: "",
+          pageAuthority: "",
+          monthlyTrafficAhrefs: "",
+          topTrafficCountry: "",
+          grayNiches: [],
+          standardPostPrice: "",
+          grayNichePrice: "",
+          dofollowAllowed: true,
+          nofollowAllowed: true,
+          postSampleUrl: "",
+          contentGuidelines: "",
+          additionalNotes: "",
+          socialMedia: {
+            facebook: "",
+            instagram: "",
+            twitter: "",
+            youtube: "",
+            linkedin: ""
+          }
+        });
+        
+        setWebsiteVerification({});
+        
+        // Reload user requests
+        loadUserRequests();
+        
+        // Switch to requests tab
+        setActiveTab("requests");
+      } else {
+        const error = await response.json();
+        showToast(error.message || "Failed to submit request", "error");
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Submit error:', err);
       showToast("Failed to submit request. Please try again.", "error");
     } finally {
       setLoading(false);
@@ -310,52 +279,59 @@ const SimplePublisherDashboard = () => {
   };
 
   // Re-analyze website
-  const reAnalyzeWebsite = (requestId) => {
+  const reAnalyzeWebsite = async (requestId) => {
     setLoading(true);
     
-    setTimeout(() => {
-      const updatedRequests = requests.map(req => {
-        if (req.id === requestId) {
-          const newAnalytics = generateAnalytics(
-            req.website, 
-            req.socialMedia, 
-            req.audienceSize,
-            {
-              domainAuthority: req.domainAuthority,
-              pageAuthority: req.pageAuthority,
-              monthlyTrafficAhrefs: req.monthlyTrafficAhrefs,
-              topTrafficCountry: req.topTrafficCountry
-            }
-          );
-          return {
-            ...req,
-            websiteAnalysis: newAnalytics,
-            analyticsSummary: {
-              totalAudience: newAnalytics.totalAudience,
-              trustLevel: newAnalytics.analysis.trustScore >= 70 ? 'High' : 
-                         newAnalytics.analysis.trustScore >= 50 ? 'Medium' : 'Low',
-              hasVerifiedData: newAnalytics.websiteInfo.hasAnalytics,
-              priceRange: req.grayNichePrice && req.grayNichePrice !== req.standardPostPrice
-                ? `$${req.standardPostPrice} - $${req.grayNichePrice}`
-                : `$${req.standardPostPrice}`
-            }
-          };
-        }
-        return req;
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/publisher/analyze-website/${requestId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          socialMedia: {}
+        })
       });
-      
-      saveUserRequests(updatedRequests);
-      showToast("Website re-analyzed successfully!", "success");
+
+      if (response.ok) {
+        showToast("Website re-analyzed successfully!", "success");
+        loadUserRequests(); // Reload requests
+      } else {
+        showToast("Failed to re-analyze website", "error");
+      }
+    } catch (error) {
+      console.error('Re-analyze error:', error);
+      showToast("Failed to re-analyze website", "error");
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   // Delete request
-  const deleteRequest = (requestId) => {
+  const deleteRequest = async (requestId) => {
     if (window.confirm("Are you sure you want to delete this request?")) {
-      const updatedRequests = requests.filter(req => req.id !== requestId);
-      saveUserRequests(updatedRequests);
-      showToast("Request deleted successfully", "success");
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_BASE_URL}/publisher/${requestId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          showToast("Request deleted successfully", "success");
+          loadUserRequests(); // Reload requests
+        } else {
+          showToast("Failed to delete request", "error");
+        }
+      } catch (error) {
+        console.error('Delete error:', error);
+        showToast("Failed to delete request", "error");
+      }
     }
   };
 
@@ -380,9 +356,9 @@ const SimplePublisherDashboard = () => {
     approvedRequests: requests.filter(r => r.status === "approved").length,
     totalAudience: requests.reduce((sum, req) => sum + (req.analyticsSummary?.totalAudience || 0), 0),
     avgTrustScore: requests.length > 0 ? 
-      Math.round(requests.reduce((sum, req) => sum + (req.websiteAnalysis?.analysis?.trustScore || 0), 0) / requests.length) : 0,
+      Math.round(requests.reduce((sum, req) => sum + (req.websiteAnalysis?.trustScore || 0), 0) / requests.length) : 0,
     avgPrice: requests.length > 0 ?
-      Math.round(requests.reduce((sum, req) => sum + (parseFloat(req.standardPostPrice) || 0), 0) / requests.length) : 0
+      Math.round(requests.reduce((sum, req) => sum + (parseFloat(req.pricing?.standardPostPrice) || 0), 0) / requests.length) : 0
   };
 
   if (!currentUser) {
@@ -587,6 +563,15 @@ const SimplePublisherDashboard = () => {
                     readOnly
                   />
                   <input
+                    type="password"
+                    name="password"
+                    placeholder="Create Password *"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                    required
+                  />
+                  <input
                     type="text"
                     name="companyName"
                     placeholder="Website/Company Name *"
@@ -702,124 +687,6 @@ const SimplePublisherDashboard = () => {
                 </div>
               </div>
 
-              {/* Link Details */}
-              <div className="border-l-4 border-secondary pl-6">
-                <h3 className="text-lg font-medium mb-4 text-secondary">Link Details</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      name="dofollowAllowed"
-                      checked={formData.dofollowAllowed}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-primary"
-                    />
-                    <span className="font-medium">Do-follow Links Allowed</span>
-                  </label>
-                  <label className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      name="nofollowAllowed"
-                      checked={formData.nofollowAllowed}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-primary"
-                    />
-                    <span className="font-medium">No-follow Links Allowed</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Content & Samples */}
-              <div className="border-l-4 border-primary pl-6">
-                <h3 className="text-lg font-medium mb-4 text-primary">Content & Samples</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Post Sample URL</label>
-                    <input
-                      type="url"
-                      name="postSampleUrl"
-                      placeholder="https://example.com/sample-post"
-                      value={formData.postSampleUrl}
-                      onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Link to a representative post on your site</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Content Guidelines or Requirements</label>
-                    <textarea
-                      name="contentGuidelines"
-                      placeholder="Describe your content standards, editorial guidelines, or any specific requirements..."
-                      value={formData.contentGuidelines}
-                      onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                      rows="3"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                    <textarea
-                      name="additionalNotes"
-                      placeholder="Any additional information, special requirements, or notes..."
-                      value={formData.additionalNotes}
-                      onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                      rows="3"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Social Media Links */}
-              <div className="border-l-4 border-secondary pl-6">
-                <h3 className="text-lg font-medium mb-4 text-secondary">Social Media Presence (Optional)</h3>
-                <p className="text-sm text-gray-600 mb-4">Add your social media links for audience verification</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    type="url"
-                    name="social_facebook"
-                    placeholder="Facebook Page URL"
-                    value={formData.socialMedia.facebook}
-                    onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                  <input
-                    type="url"
-                    name="social_instagram"
-                    placeholder="Instagram Profile URL"
-                    value={formData.socialMedia.instagram}
-                    onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                  <input
-                    type="url"
-                    name="social_twitter"
-                    placeholder="Twitter Profile URL"
-                    value={formData.socialMedia.twitter}
-                    onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                  <input
-                    type="url"
-                    name="social_youtube"
-                    placeholder="YouTube Channel URL"
-                    value={formData.socialMedia.youtube}
-                    onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                  <input
-                    type="url"
-                    name="social_linkedin"
-                    placeholder="LinkedIn Profile URL"
-                    value={formData.socialMedia.linkedin}
-                    onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-              </div>
-
               {/* Audience Size */}
               <div className="border-l-4 border-primary pl-6">
                 <h3 className="text-lg font-medium mb-4 text-primary">Audience Information</h3>
@@ -840,10 +707,10 @@ const SimplePublisherDashboard = () => {
               <div className="bg-gray-100 p-6 rounded-lg border-l-4 border-primary">
                 <h4 className="font-medium text-primary mb-3">What happens next?</h4>
                 <ul className="text-sm text-gray-700 space-y-2">
-                  <li>• We'll automatically analyze your website metrics and social presence</li>
-                  <li>• Your pricing and niche preferences will be recorded</li>
-                  <li>• Trust score calculated based on DA, PA, and traffic data</li>
+                  <li>• Your request will be submitted to our database</li>
+                  <li>• Admin will review your website and pricing</li>
                   <li>• Review process takes 2-3 business days</li>
+                  <li>• You'll be notified of approval/rejection status</li>
                   <li>• You can submit multiple sites with different pricing</li>
                 </ul>
               </div>
@@ -860,7 +727,7 @@ const SimplePublisherDashboard = () => {
                 disabled={loading}
                 className="w-full bg-primary text-white py-4 rounded-lg hover:bg-secondary transition disabled:bg-gray-400 font-medium text-lg shadow-lg"
               >
-                {loading ? "Analyzing Website & Submitting..." : "Submit Publisher Request & Generate Analytics"}
+                {loading ? "Submitting Request..." : "Submit Publisher Request"}
               </button>
             </form>
           </motion.div>
@@ -891,7 +758,7 @@ const SimplePublisherDashboard = () => {
                 <div className="space-y-6">
                   {requests.map((req) => (
                     <div
-                      key={req.id}
+                      key={req._id}
                       className="border rounded-lg bg-gray-50 shadow-sm hover:shadow-md transition"
                     >
                       {/* Request Header */}
@@ -899,13 +766,13 @@ const SimplePublisherDashboard = () => {
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <h3 className="font-semibold text-lg text-primary">{req.companyName}</h3>
-                            <p className="text-gray-600">{req.publisherName}</p>
+                            <p className="text-gray-600">{req.fullName}</p>
                             <div className="flex space-x-4 mt-2 text-sm">
                               <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs">
                                 {req.category}
                               </span>
                               <span className="bg-secondary text-white px-2 py-1 rounded-full text-xs font-medium">
-                                {req.analyticsSummary?.priceRange}
+                                ${req.pricing?.standardPostPrice || 'N/A'}
                               </span>
                             </div>
                           </div>
@@ -922,7 +789,7 @@ const SimplePublisherDashboard = () => {
                               {req.status.toUpperCase()}
                             </span>
                             <button
-                              onClick={() => deleteRequest(req.id)}
+                              onClick={() => deleteRequest(req._id)}
                               className="text-red-600 hover:text-red-800 text-sm"
                               title="Delete Request"
                             >
@@ -946,8 +813,8 @@ const SimplePublisherDashboard = () => {
                           <div>
                             <span className="font-medium">Link Types:</span>
                             <div className="ml-1">
-                              {req.dofollowAllowed && <span className="text-green-600 text-xs">Dofollow </span>}
-                              {req.nofollowAllowed && <span className="text-primary text-xs">Nofollow</span>}
+                              {req.linkDetails?.dofollowAllowed && <span className="text-green-600 text-xs">Dofollow </span>}
+                              {req.linkDetails?.nofollowAllowed && <span className="text-primary text-xs">Nofollow</span>}
                             </div>
                           </div>
                           <div>
@@ -960,32 +827,32 @@ const SimplePublisherDashboard = () => {
                       {req.websiteAnalysis && (
                         <div className="p-6 bg-gray-100">
                           <h4 className="font-semibold mb-4 text-primary flex items-center">
-                            📊 Complete Analytics Report
+                            📊 Analytics Report
                           </h4>
                           
                           {/* Key Metrics Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
                               <p className="text-xl font-bold text-primary">
-                                {formatNumber(req.websiteAnalysis.trafficData.monthlyVisits)}
+                                {formatNumber(req.websiteAnalysis.monthlyTraffic || 0)}
                               </p>
                               <p className="text-xs text-gray-600">Monthly Traffic</p>
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
                               <p className="text-xl font-bold text-secondary">
-                                {req.websiteAnalysis.seoMetrics?.domainAuthority || 'N/A'}/100
+                                {req.domainAuthority || req.websiteAnalysis.domainAuthority || 'N/A'}/100
                               </p>
                               <p className="text-xs text-gray-600">Domain Authority</p>
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTrustLevelColor(req.websiteAnalysis.analysis.trustScore)}`}>
-                                {req.websiteAnalysis.analysis.trustScore}/100
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTrustLevelColor(req.websiteAnalysis.trustScore || 0)}`}>
+                                {req.websiteAnalysis.trustScore || 0}/100
                               </span>
                               <p className="text-xs text-gray-600 mt-1">Trust Score</p>
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
                               <p className="text-lg font-bold text-primary">
-                                {Object.keys(req.websiteAnalysis.socialData || {}).length}
+                                {Object.keys(req.websiteAnalysis.socialMedia || {}).length}
                               </p>
                               <p className="text-xs text-gray-600">Social Platforms</p>
                             </div>
@@ -994,10 +861,10 @@ const SimplePublisherDashboard = () => {
                           {/* Action Buttons */}
                           <div className="flex justify-between items-center">
                             <p className="text-xs text-gray-500">
-                              Last analyzed: {new Date(req.websiteAnalysis.analysis.lastAnalyzed).toLocaleDateString()}
+                              Last analyzed: {new Date(req.websiteAnalysis.lastAnalyzed).toLocaleDateString()}
                             </p>
                             <button
-                              onClick={() => reAnalyzeWebsite(req.id)}
+                              onClick={() => reAnalyzeWebsite(req._id)}
                               disabled={loading}
                               className="bg-primary text-white px-4 py-2 rounded text-sm hover:bg-secondary disabled:bg-gray-400 transition"
                             >
@@ -1010,8 +877,8 @@ const SimplePublisherDashboard = () => {
                       <div className="p-4 bg-gray-200 rounded-b-lg">
                         <div className="flex justify-between items-center text-xs text-gray-500">
                           <span>Submitted: {new Date(req.createdAt).toLocaleString()}</span>
-                          {req.postSampleUrl && (
-                            <a href={req.postSampleUrl} target="_blank" rel="noopener noreferrer" 
+                          {req.contentDetails?.postSampleUrl && (
+                            <a href={req.contentDetails.postSampleUrl} target="_blank" rel="noopener noreferrer" 
                                className="text-primary hover:underline">
                               View Sample Post
                             </a>
@@ -1098,7 +965,7 @@ const SimplePublisherDashboard = () => {
                     <h3 className="font-semibold mb-4 text-primary">Recent Activity</h3>
                     <div className="space-y-3">
                       {requests.slice(0, 3).map((req) => (
-                        <div key={req.id} className="flex justify-between items-center bg-white p-3 rounded-lg">
+                        <div key={req._id} className="flex justify-between items-center bg-white p-3 rounded-lg">
                           <div>
                             <p className="font-medium text-sm text-primary">{req.companyName}</p>
                             <p className="text-xs text-gray-600">
@@ -1117,16 +984,16 @@ const SimplePublisherDashboard = () => {
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-medium text-secondary">
-                              ${req.standardPostPrice}
-                              {req.grayNichePrice && req.grayNichePrice !== req.standardPostPrice && 
-                                ` - ${req.grayNichePrice}`
+                              ${req.pricing?.standardPostPrice || 'N/A'}
+                              {req.pricing?.grayNichePrice && req.pricing.grayNichePrice !== req.pricing.standardPostPrice && 
+                                ` - ${req.pricing.grayNichePrice}`
                               }
                             </p>
                             <p className="text-xs text-gray-500">
                               {formatNumber(req.analyticsSummary?.totalAudience || 0)} audience
                             </p>
                             <p className="text-xs text-gray-500">
-                              DA: {req.domainAuthority || req.websiteAnalysis?.seoMetrics?.domainAuthority || 'N/A'}
+                              DA: {req.domainAuthority || req.websiteAnalysis?.domainAuthority || 'N/A'}
                             </p>
                           </div>
                         </div>
