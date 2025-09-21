@@ -14,7 +14,7 @@ const ForgotPassword = () => {
     setLoading(true);
     try {
       // 🔑 Call backend API
-      const res = await axios.post("https://event-backend-swart.vercel.app/api/auth/forgot-password", { email });
+      const res = await axios.post("https://event-backend-eu68.vercel.app/api/auth/forgot-password", { email });
 
       if (res.data.success) {
         toast.success("Password reset link sent to your email!");

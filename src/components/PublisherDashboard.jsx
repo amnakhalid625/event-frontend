@@ -9,6 +9,13 @@ const SimplePublisherDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [websiteVerification, setWebsiteVerification] = useState({});
+  const [toast, setToast] = useState({ show: false, message: "", type: "" });
+  
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: "", type: "" }), 3000);
+  };
   
   // Categories and Gray Niches
   const categories = [
@@ -130,8 +137,6 @@ const SimplePublisherDashboard = () => {
     localStorage.setItem("all_publisher_requests", JSON.stringify(updatedAllRequests));
     setRequests(userRequests);
   };
-
- 
 
   // Handle input changes
   const handleChange = (e) => {
@@ -259,18 +264,8 @@ const SimplePublisherDashboard = () => {
       const updatedRequests = [newRequest, ...requests];
       saveUserRequests(updatedRequests);
       
-      // Show success message
-      alert(`Publisher Request Submitted Successfully!
-      
-Analytics Summary:
-• Monthly Traffic: ${formatNumber(analytics.trafficData.monthlyVisits)}
-• Total Audience: ${formatNumber(analytics.totalAudience)}
-• Domain Authority: ${analytics.seoMetrics.domainAuthority}/100
-• Trust Score: ${analytics.analysis.trustScore}/100
-• Price Range: ${newRequest.analyticsSummary.priceRange}
-• Gray Niches: ${formData.grayNiches.length} selected
-
-Your request has been added to your dashboard.`);
+      // Show success message with toast
+      showToast(`Publisher Request Submitted Successfully!`, "success");
       
       // Reset form (but keep user details)
       setFormData({
@@ -308,7 +303,7 @@ Your request has been added to your dashboard.`);
       setActiveTab("requests");
     } catch (err) {
       console.error(err);
-      alert("Failed to submit request. Please try again.");
+      showToast("Failed to submit request. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -350,7 +345,7 @@ Your request has been added to your dashboard.`);
       });
       
       saveUserRequests(updatedRequests);
-      alert("Website re-analyzed successfully!");
+      showToast("Website re-analyzed successfully!", "success");
       setLoading(false);
     }, 2000);
   };
@@ -360,6 +355,7 @@ Your request has been added to your dashboard.`);
     if (window.confirm("Are you sure you want to delete this request?")) {
       const updatedRequests = requests.filter(req => req.id !== requestId);
       saveUserRequests(updatedRequests);
+      showToast("Request deleted successfully", "success");
     }
   };
 
@@ -391,10 +387,10 @@ Your request has been added to your dashboard.`);
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -402,18 +398,31 @@ Your request has been added to your dashboard.`);
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-opacity duration-300 ${
+          toast.type === "error" 
+            ? "bg-red-100 text-red-800 border-l-4 border-red-600" 
+            : "bg-green-100 text-green-800 border-l-4 border-green-600"
+        }`}>
+          <div className="flex items-center">
+            <span className="mr-2">{toast.type === "error" ? "❌" : "✅"}</span>
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="bg-blue-600 text-white py-4 px-6 shadow">
+      <header className="bg-primary text-white py-4 px-6 shadow">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">Publisher Dashboard</h1>
-            <p className="text-blue-200 text-sm">Welcome, {currentUser.fullName}</p>
+            <p className="text-secondary text-sm">Welcome, {currentUser.fullName}</p>
           </div>
           <div className="flex items-center space-x-4">
-            <div className="text-sm bg-blue-700 px-3 py-1 rounded">
+            <div className="text-sm bg-secondary px-3 py-1 rounded">
               {requests.length} Request{requests.length !== 1 ? 's' : ''} Submitted
             </div>
-           
           </div>
         </div>
       </header>
@@ -424,7 +433,7 @@ Your request has been added to your dashboard.`);
           onClick={() => setActiveTab("create-request")}
           className={`px-3 py-2 rounded-md font-medium ${
             activeTab === "create-request"
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-white"
               : "text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -434,7 +443,7 @@ Your request has been added to your dashboard.`);
           onClick={() => setActiveTab("requests")}
           className={`px-3 py-2 rounded-md font-medium relative ${
             activeTab === "requests"
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-white"
               : "text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -449,7 +458,7 @@ Your request has been added to your dashboard.`);
           onClick={() => setActiveTab("overview")}
           className={`px-3 py-2 rounded-md font-medium ${
             activeTab === "overview"
-              ? "bg-blue-600 text-white"
+              ? "bg-primary text-white"
               : "text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -466,14 +475,14 @@ Your request has been added to your dashboard.`);
             animate={{ opacity: 1, y: 0 }}
             className="bg-white shadow rounded-lg p-6 max-w-5xl mx-auto"
           >
-            <h2 className="text-xl font-semibold mb-6 text-center">
+            <h2 className="text-xl font-semibold mb-6 text-center text-primary">
               Publisher Details Form
             </h2>
 
             <form className="space-y-8" onSubmit={handleSubmit}>
               {/* Site Information */}
-              <div className="border-l-4 border-blue-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-blue-800">Site Information</h3>
+              <div className="border-l-4 border-primary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-primary">Site Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Website URL *</label>
@@ -484,7 +493,7 @@ Your request has been added to your dashboard.`);
                       value={formData.website}
                       onChange={handleChange}
                       onBlur={() => verifyWebsite(formData.website)}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       required
                     />
                     {websiteVerification.isAccessible === false && (
@@ -503,7 +512,7 @@ Your request has been added to your dashboard.`);
                       placeholder="0-100"
                       value={formData.domainAuthority}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       min="0"
                       max="100"
                     />
@@ -517,7 +526,7 @@ Your request has been added to your dashboard.`);
                       placeholder="0-100"
                       value={formData.pageAuthority}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       min="0"
                       max="100"
                     />
@@ -531,7 +540,7 @@ Your request has been added to your dashboard.`);
                       placeholder="Monthly visits"
                       value={formData.monthlyTrafficAhrefs}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       min="0"
                     />
                   </div>
@@ -542,7 +551,7 @@ Your request has been added to your dashboard.`);
                       name="topTrafficCountry"
                       value={formData.topTrafficCountry}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     >
                       <option value="">Select Country</option>
                       {countries.map(country => (
@@ -554,8 +563,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Publisher Information */}
-              <div className="border-l-4 border-green-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-green-800">Publisher Information</h3>
+              <div className="border-l-4 border-secondary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-secondary">Publisher Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input
                     type="text"
@@ -563,7 +572,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Your Full Name *"
                     value={formData.publisherName}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     required
                     readOnly
                   />
@@ -573,7 +582,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Your Email Address *"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     required
                     readOnly
                   />
@@ -583,7 +592,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Website/Company Name *"
                     value={formData.companyName}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     required
                   />
                   <input
@@ -592,7 +601,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Phone Number *"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     required
                   />
                 </div>
@@ -601,20 +610,20 @@ Your request has been added to your dashboard.`);
                   placeholder="Complete Business Address *"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mt-4"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary mt-4"
                   rows="2"
                   required
                 />
               </div>
 
               {/* Category */}
-              <div className="border-l-4 border-purple-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-purple-800">Main Category *</h3>
+              <div className="border-l-4 border-primary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-primary">Main Category *</h3>
                 <select
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   required
                 >
                   <option value="">Choose one category</option>
@@ -625,8 +634,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Gray Niches */}
-              <div className="border-l-4 border-orange-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-orange-800">Gray Niches (select all that apply)</h3>
+              <div className="border-l-4 border-secondary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-secondary">Gray Niches (select all that apply)</h3>
                 <p className="text-sm text-gray-600 mb-4">Select the sensitive niches you're willing to work with:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {grayNiches.map(niche => (
@@ -637,7 +646,7 @@ Your request has been added to your dashboard.`);
                         value={niche}
                         checked={formData.grayNiches.includes(niche)}
                         onChange={handleChange}
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4 text-primary"
                       />
                       <span className="text-sm font-medium">{niche}</span>
                     </label>
@@ -651,7 +660,7 @@ Your request has been added to your dashboard.`);
                       value="Other"
                       checked={formData.grayNiches.includes("Other")}
                       onChange={handleChange}
-                      className="w-4 h-4 text-blue-600"
+                      className="w-4 h-4 text-primary"
                     />
                     <span className="text-sm font-medium">Other (specify in additional notes)</span>
                   </label>
@@ -659,8 +668,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Pricing */}
-              <div className="border-l-4 border-red-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-red-800">Pricing</h3>
+              <div className="border-l-4 border-primary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-primary">Pricing</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Standard Post Price ($) *</label>
@@ -670,7 +679,7 @@ Your request has been added to your dashboard.`);
                       placeholder="e.g. 50"
                       value={formData.standardPostPrice}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       min="0"
                       step="0.01"
                       required
@@ -684,7 +693,7 @@ Your request has been added to your dashboard.`);
                       placeholder="Leave empty if same as standard"
                       value={formData.grayNichePrice}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       min="0"
                       step="0.01"
                     />
@@ -694,8 +703,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Link Details */}
-              <div className="border-l-4 border-teal-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-teal-800">Link Details</h3>
+              <div className="border-l-4 border-secondary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-secondary">Link Details</h3>
                 <div className="space-y-3">
                   <label className="flex items-center space-x-3">
                     <input
@@ -703,7 +712,7 @@ Your request has been added to your dashboard.`);
                       name="dofollowAllowed"
                       checked={formData.dofollowAllowed}
                       onChange={handleChange}
-                      className="w-4 h-4 text-blue-600"
+                      className="w-4 h-4 text-primary"
                     />
                     <span className="font-medium">Do-follow Links Allowed</span>
                   </label>
@@ -713,7 +722,7 @@ Your request has been added to your dashboard.`);
                       name="nofollowAllowed"
                       checked={formData.nofollowAllowed}
                       onChange={handleChange}
-                      className="w-4 h-4 text-blue-600"
+                      className="w-4 h-4 text-primary"
                     />
                     <span className="font-medium">No-follow Links Allowed</span>
                   </label>
@@ -721,8 +730,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Content & Samples */}
-              <div className="border-l-4 border-indigo-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-indigo-800">Content & Samples</h3>
+              <div className="border-l-4 border-primary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-primary">Content & Samples</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Post Sample URL</label>
@@ -732,7 +741,7 @@ Your request has been added to your dashboard.`);
                       placeholder="https://example.com/sample-post"
                       value={formData.postSampleUrl}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                     />
                     <p className="text-xs text-gray-500 mt-1">Link to a representative post on your site</p>
                   </div>
@@ -744,7 +753,7 @@ Your request has been added to your dashboard.`);
                       placeholder="Describe your content standards, editorial guidelines, or any specific requirements..."
                       value={formData.contentGuidelines}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       rows="3"
                     />
                   </div>
@@ -756,7 +765,7 @@ Your request has been added to your dashboard.`);
                       placeholder="Any additional information, special requirements, or notes..."
                       value={formData.additionalNotes}
                       onChange={handleChange}
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                       rows="3"
                     />
                   </div>
@@ -764,8 +773,8 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Social Media Links */}
-              <div className="border-l-4 border-pink-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-pink-800">Social Media Presence (Optional)</h3>
+              <div className="border-l-4 border-secondary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-secondary">Social Media Presence (Optional)</h3>
                 <p className="text-sm text-gray-600 mb-4">Add your social media links for audience verification</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input
@@ -774,7 +783,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Facebook Page URL"
                     value={formData.socialMedia.facebook}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                   <input
                     type="url"
@@ -782,7 +791,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Instagram Profile URL"
                     value={formData.socialMedia.instagram}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                   <input
                     type="url"
@@ -790,7 +799,7 @@ Your request has been added to your dashboard.`);
                     placeholder="Twitter Profile URL"
                     value={formData.socialMedia.twitter}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                   <input
                     type="url"
@@ -798,7 +807,7 @@ Your request has been added to your dashboard.`);
                     placeholder="YouTube Channel URL"
                     value={formData.socialMedia.youtube}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                   <input
                     type="url"
@@ -806,21 +815,21 @@ Your request has been added to your dashboard.`);
                     placeholder="LinkedIn Profile URL"
                     value={formData.socialMedia.linkedin}
                     onChange={handleChange}
-                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
               </div>
 
               {/* Audience Size */}
-              <div className="border-l-4 border-yellow-500 pl-6">
-                <h3 className="text-lg font-medium mb-4 text-yellow-800">Audience Information</h3>
+              <div className="border-l-4 border-primary pl-6">
+                <h3 className="text-lg font-medium mb-4 text-primary">Audience Information</h3>
                 <input
                   type="number"
                   name="audienceSize"
                   placeholder="Current Monthly Audience *"
                   value={formData.audienceSize}
                   onChange={handleChange}
-                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                   required
                   min="0"
                 />
@@ -828,9 +837,9 @@ Your request has been added to your dashboard.`);
               </div>
 
               {/* Terms and Conditions */}
-              <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-500">
-                <h4 className="font-medium text-blue-800 mb-3">What happens next?</h4>
-                <ul className="text-sm text-blue-700 space-y-2">
+              <div className="bg-gray-100 p-6 rounded-lg border-l-4 border-primary">
+                <h4 className="font-medium text-primary mb-3">What happens next?</h4>
+                <ul className="text-sm text-gray-700 space-y-2">
                   <li>• We'll automatically analyze your website metrics and social presence</li>
                   <li>• Your pricing and niche preferences will be recorded</li>
                   <li>• Trust score calculated based on DA, PA, and traffic data</li>
@@ -840,7 +849,7 @@ Your request has been added to your dashboard.`);
               </div>
 
               <div className="flex items-center space-x-2">
-                <input type="checkbox" id="terms" className="w-4 h-4" required />
+                <input type="checkbox" id="terms" className="w-4 h-4 text-primary" required />
                 <label htmlFor="terms" className="text-gray-600 text-sm">
                   I agree to the Terms and Conditions and confirm all information is accurate *
                 </label>
@@ -849,7 +858,7 @@ Your request has been added to your dashboard.`);
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition disabled:from-blue-400 disabled:to-blue-400 font-medium text-lg shadow-lg"
+                className="w-full bg-primary text-white py-4 rounded-lg hover:bg-secondary transition disabled:bg-gray-400 font-medium text-lg shadow-lg"
               >
                 {loading ? "Analyzing Website & Submitting..." : "Submit Publisher Request & Generate Analytics"}
               </button>
@@ -865,7 +874,7 @@ Your request has been added to your dashboard.`);
             className="space-y-6"
           >
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Your Publisher Requests</h2>
+              <h2 className="text-xl font-semibold mb-4 text-primary">Your Publisher Requests</h2>
 
               {requests.length === 0 ? (
                 <div className="text-center py-8">
@@ -873,7 +882,7 @@ Your request has been added to your dashboard.`);
                   <p className="text-gray-600 mb-4">No requests submitted yet</p>
                   <button
                     onClick={() => setActiveTab("create-request")}
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-secondary"
                   >
                     Submit Your First Request
                   </button>
@@ -889,13 +898,13 @@ Your request has been added to your dashboard.`);
                       <div className="p-6 border-b bg-white rounded-t-lg">
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                            <h3 className="font-semibold text-lg text-blue-800">{req.companyName}</h3>
+                            <h3 className="font-semibold text-lg text-primary">{req.companyName}</h3>
                             <p className="text-gray-600">{req.publisherName}</p>
                             <div className="flex space-x-4 mt-2 text-sm">
-                              <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                              <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs">
                                 {req.category}
                               </span>
-                              <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                              <span className="bg-secondary text-white px-2 py-1 rounded-full text-xs font-medium">
                                 {req.analyticsSummary?.priceRange}
                               </span>
                             </div>
@@ -926,7 +935,7 @@ Your request has been added to your dashboard.`);
                           <div>
                             <span className="font-medium">Website:</span>
                             <a href={req.website} target="_blank" rel="noopener noreferrer" 
-                               className="text-blue-600 hover:underline ml-1 block truncate">
+                               className="text-primary hover:underline ml-1 block truncate">
                               {req.website}
                             </a>
                           </div>
@@ -938,7 +947,7 @@ Your request has been added to your dashboard.`);
                             <span className="font-medium">Link Types:</span>
                             <div className="ml-1">
                               {req.dofollowAllowed && <span className="text-green-600 text-xs">Dofollow </span>}
-                              {req.nofollowAllowed && <span className="text-blue-600 text-xs">Nofollow</span>}
+                              {req.nofollowAllowed && <span className="text-primary text-xs">Nofollow</span>}
                             </div>
                           </div>
                           <div>
@@ -949,21 +958,21 @@ Your request has been added to your dashboard.`);
 
                       {/* Analytics Section */}
                       {req.websiteAnalysis && (
-                        <div className="p-6 bg-gradient-to-r from-blue-50 to-cyan-50">
-                          <h4 className="font-semibold mb-4 text-blue-800 flex items-center">
+                        <div className="p-6 bg-gray-100">
+                          <h4 className="font-semibold mb-4 text-primary flex items-center">
                             📊 Complete Analytics Report
                           </h4>
                           
                           {/* Key Metrics Grid */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
-                              <p className="text-xl font-bold text-blue-600">
+                              <p className="text-xl font-bold text-primary">
                                 {formatNumber(req.websiteAnalysis.trafficData.monthlyVisits)}
                               </p>
                               <p className="text-xs text-gray-600">Monthly Traffic</p>
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
-                              <p className="text-xl font-bold text-green-600">
+                              <p className="text-xl font-bold text-secondary">
                                 {req.websiteAnalysis.seoMetrics?.domainAuthority || 'N/A'}/100
                               </p>
                               <p className="text-xs text-gray-600">Domain Authority</p>
@@ -975,7 +984,7 @@ Your request has been added to your dashboard.`);
                               <p className="text-xs text-gray-600 mt-1">Trust Score</p>
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
-                              <p className="text-lg font-bold text-purple-600">
+                              <p className="text-lg font-bold text-primary">
                                 {Object.keys(req.websiteAnalysis.socialData || {}).length}
                               </p>
                               <p className="text-xs text-gray-600">Social Platforms</p>
@@ -990,7 +999,7 @@ Your request has been added to your dashboard.`);
                             <button
                               onClick={() => reAnalyzeWebsite(req.id)}
                               disabled={loading}
-                              className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:bg-blue-300 transition"
+                              className="bg-primary text-white px-4 py-2 rounded text-sm hover:bg-secondary disabled:bg-gray-400 transition"
                             >
                               Re-analyze Website
                             </button>
@@ -998,12 +1007,12 @@ Your request has been added to your dashboard.`);
                         </div>
                       )}
 
-                      <div className="p-4 bg-gray-100 rounded-b-lg">
+                      <div className="p-4 bg-gray-200 rounded-b-lg">
                         <div className="flex justify-between items-center text-xs text-gray-500">
                           <span>Submitted: {new Date(req.createdAt).toLocaleString()}</span>
                           {req.postSampleUrl && (
                             <a href={req.postSampleUrl} target="_blank" rel="noopener noreferrer" 
-                               className="text-blue-600 hover:underline">
+                               className="text-primary hover:underline">
                               View Sample Post
                             </a>
                           )}
@@ -1025,50 +1034,50 @@ Your request has been added to your dashboard.`);
             className="space-y-6"
           >
             <div className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-6">Publisher Dashboard Overview</h2>
+              <h2 className="text-xl font-semibold mb-6 text-primary">Publisher Dashboard Overview</h2>
               
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-lg">
+                <div className="bg-primary text-white p-4 rounded-lg">
                   <h3 className="text-sm font-medium mb-1">Total Requests</h3>
                   <p className="text-2xl font-bold">{stats.totalRequests}</p>
                 </div>
-                <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white p-4 rounded-lg">
+                <div className="bg-secondary text-white p-4 rounded-lg">
                   <h3 className="text-sm font-medium mb-1">Pending</h3>
                   <p className="text-2xl font-bold">{stats.pendingRequests}</p>
                 </div>
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-lg">
+                <div className="bg-green-500 text-white p-4 rounded-lg">
                   <h3 className="text-sm font-medium mb-1">Approved</h3>
                   <p className="text-2xl font-bold">{stats.approvedRequests}</p>
                 </div>
-                <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 rounded-lg">
+                <div className="bg-gray-700 text-white p-4 rounded-lg">
                   <h3 className="text-sm font-medium mb-1">Total Audience</h3>
                   <p className="text-2xl font-bold">{formatNumber(stats.totalAudience)}</p>
                 </div>
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white p-4 rounded-lg">
+                <div className="bg-primary text-white p-4 rounded-lg">
                   <h3 className="text-sm font-medium mb-1">Avg Price</h3>
                   <p className="text-2xl font-bold">${stats.avgPrice}</p>
                 </div>
               </div>
 
               {requests.length === 0 ? (
-                <div className="text-center py-12 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg">
+                <div className="text-center py-12 bg-gray-100 rounded-lg">
                   <div className="text-6xl mb-4">🚀</div>
-                  <h3 className="text-xl font-semibold mb-2">Welcome to Publisher Dashboard!</h3>
+                  <h3 className="text-xl font-semibold mb-2 text-primary">Welcome to Publisher Dashboard!</h3>
                   <p className="text-gray-600 mb-6">
                     Start earning by submitting your website for review.
                   </p>
                   <button
                     onClick={() => setActiveTab("create-request")}
-                    className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg hover:bg-blue-700 transition"
+                    className="bg-primary text-white px-8 py-3 rounded-lg text-lg hover:bg-secondary transition"
                   >
                     Submit Your First Request
                   </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h3 className="font-semibold mb-4">Performance Metrics</h3>
+                  <div className="bg-gray-100 p-6 rounded-lg">
+                    <h3 className="font-semibold mb-4 text-primary">Performance Metrics</h3>
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between text-sm mb-1">
@@ -1077,7 +1086,7 @@ Your request has been added to your dashboard.`);
                         </div>
                         <div className="w-full bg-gray-300 rounded-full h-2">
                           <div 
-                            className="h-2 bg-blue-500 rounded-full transition-all duration-500"
+                            className="h-2 bg-primary rounded-full transition-all duration-500"
                             style={{ width: `${stats.avgTrustScore}%` }}
                           />
                         </div>
@@ -1085,29 +1094,29 @@ Your request has been added to your dashboard.`);
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h3 className="font-semibold mb-4">Recent Activity</h3>
+                  <div className="bg-gray-100 p-6 rounded-lg">
+                    <h3 className="font-semibold mb-4 text-primary">Recent Activity</h3>
                     <div className="space-y-3">
                       {requests.slice(0, 3).map((req) => (
                         <div key={req.id} className="flex justify-between items-center bg-white p-3 rounded-lg">
                           <div>
-                            <p className="font-medium text-sm">{req.companyName}</p>
+                            <p className="font-medium text-sm text-primary">{req.companyName}</p>
                             <p className="text-xs text-gray-600">
                               {new Date(req.createdAt).toLocaleDateString()} - {req.status}
                             </p>
                             <div className="flex space-x-2 mt-1">
                               {req.grayNiches && req.grayNiches.length > 0 && (
-                                <span className="text-xs bg-orange-100 text-orange-600 px-1 rounded">
+                                <span className="text-xs bg-gray-200 text-gray-800 px-1 rounded">
                                   {req.grayNiches.length} Gray Niches
                                 </span>
                               )}
-                              <span className="text-xs bg-blue-100 text-blue-600 px-1 rounded">
+                              <span className="text-xs bg-primary text-white px-1 rounded">
                                 {req.category}
                               </span>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-green-600">
+                            <p className="text-sm font-medium text-secondary">
                               ${req.standardPostPrice}
                               {req.grayNichePrice && req.grayNichePrice !== req.standardPostPrice && 
                                 ` - ${req.grayNichePrice}`
@@ -1125,7 +1134,7 @@ Your request has been added to your dashboard.`);
                       {requests.length > 3 && (
                         <button
                           onClick={() => setActiveTab("requests")}
-                          className="text-blue-600 hover:text-blue-800 text-sm w-full text-left"
+                          className="text-primary hover:text-secondary text-sm w-full text-left"
                         >
                           View all {requests.length} requests →
                         </button>
@@ -1146,7 +1155,7 @@ Your request has been added to your dashboard.`);
       {loading && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Processing your request...</p>
           </div>
         </div>

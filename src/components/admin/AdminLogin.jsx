@@ -26,7 +26,7 @@ const AdminLogin = ({ onLoginSuccess }) => {
 
     try {
       // Try to login with the provided credentials
-      const response = await fetch('https://event-backend-swart.vercel.app/api/auth/login', {
+      const response = await fetch('https://event-backend-eu68.vercel.app/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ const AdminLogin = ({ onLoginSuccess }) => {
 
   const runSeedScript = async () => {
     try {
-      const response = await fetch('https://event-backend-swart.vercel.app/api/admin/run-seed', {
+      const response = await fetch('https://event-backend-eu68.vercel.app/api/admin/run-seed', {
         method: 'POST'
       });
       

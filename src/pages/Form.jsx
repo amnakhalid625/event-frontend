@@ -27,7 +27,7 @@ const Form = () => {
     }
 
     try {
-      const res = await axios.post("https://event-backend-swart.vercel.app/api/auth/login", {
+      const res = await axios.post("https://event-backend-eu68.vercel.app/api/auth/login", {
         email,
         password,
       });

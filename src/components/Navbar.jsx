@@ -54,7 +54,7 @@ const Navbar = () => {
         setIsLoading(false);
         
         // Then verify with backend (optional, for data consistency)
-        const response = await axios.get("https://event-backend-swart.vercel.app/api/auth/profile", {
+        const response = await axios.get("https://event-backend-eu68.vercel.app/api/auth/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         
