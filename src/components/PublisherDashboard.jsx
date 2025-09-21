@@ -9,9 +9,11 @@ const SimplePublisherDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [websiteVerification, setWebsiteVerification] = useState({});
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   
-  // API base URL - adjust this to match your backend
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  // API base URL - your Vercel backend
+  const API_BASE_URL = 'https://event-backend-eu68.vercel.app/api';
   
   // Categories and Gray Niches
   const categories = [
@@ -82,76 +84,151 @@ const SimplePublisherDashboard = () => {
     }
   });
 
+  // Clear messages after 5 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError("");
+        setSuccess("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
+
   // Get auth token
   const getAuthToken = () => {
     return localStorage.getItem("token");
   };
 
-  // API call helper with auth
+  // API call helper with proper error handling
   const apiCall = async (endpoint, method = 'GET', data = null) => {
     const token = getAuthToken();
-    const config = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
+    
+    try {
+      const config = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        credentials: 'omit'
+      };
+
+      if (data && method !== 'GET') {
+        config.body = JSON.stringify(data);
       }
-    };
 
-    if (data && method !== 'GET') {
-      config.body = JSON.stringify(data);
-    }
+      console.log('API Call:', method, `${API_BASE_URL}${endpoint}`);
+      console.log('Auth token present:', !!token);
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'API request failed');
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+      
+      console.log('Response status:', response.status);
+      
+      const contentType = response.headers.get('content-type');
+      let result;
+      
+      if (contentType && contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        const textResult = await response.text();
+        console.log('Non-JSON response:', textResult);
+        result = { message: textResult };
+      }
+      
+      if (!response.ok) {
+        console.error('API Error Response:', result);
+        
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          throw new Error("Session expired. Please login again.");
+        }
+        
+        throw new Error(result.message || `Server error: ${response.status}`);
+      }
+      
+      console.log('API Success:', result);
+      return result;
+    } catch (error) {
+      console.error('API call failed:', error);
+      
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Cannot connect to server. Please check your internet connection and try again.');
+      }
+      
+      throw error;
     }
-    
-    return response.json();
   };
 
   // Check authentication and load user data
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("user");
-    
-    if (!token || !userData) {
-      navigate("/login");
-      return;
-    }
+    const initializeUser = () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("user");
+      
+      console.log('Auth check - Token exists:', !!token);
+      console.log('Auth check - User data exists:', !!userData);
+      
+      if (!token || !userData) {
+        console.log('No auth data found, redirecting to login');
+        navigate("/login");
+        return false;
+      }
 
-    const user = JSON.parse(userData);
-    
-    // Check if user is a publisher or regular user (both can create publisher requests)
-    if (!user.role || (user.role !== "publisher" && user.role !== "user")) {
-      navigate("/login");
-      return;
-    }
+      try {
+        const user = JSON.parse(userData);
+        console.log('User data:', user);
+        
+        if (!user.role || !["user", "publisher", "admin"].includes(user.role)) {
+          console.log('Invalid user role:', user.role);
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return false;
+        }
 
-    setCurrentUser(user);
-    
-    // Pre-fill form with user data
-    setFormData(prev => ({
-      ...prev,
-      publisherName: user.fullName || "",
-      email: user.email || ""
-    }));
-    
-    // Load user's requests from API
-    loadUserRequests();
+        setCurrentUser(user);
+        
+        setFormData(prev => ({
+          ...prev,
+          publisherName: user.fullName || "",
+          email: user.email || ""
+        }));
+        
+        return true;
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+        return false;
+      }
+    };
+
+    if (initializeUser()) {
+      loadUserRequests();
+    }
   }, [navigate]);
 
   // Load requests from API
   const loadUserRequests = async () => {
     try {
       setLoading(true);
+      setError("");
+      
+      console.log('Loading user requests...');
       const response = await apiCall('/publisher-requests');
-      setRequests(response || []);
+      
+      console.log('Requests loaded:', response?.length || 0);
+      setRequests(Array.isArray(response) ? response : []);
+      
     } catch (error) {
       console.error('Failed to load requests:', error);
-      alert('Failed to load your requests. Please try refreshing the page.');
+      setError(`Failed to load your requests: ${error.message}`);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -161,41 +238,48 @@ const SimplePublisherDashboard = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
+    setError("");
+    
     if (name.startsWith('social_')) {
       const socialPlatform = name.replace('social_', '');
-      setFormData({
-        ...formData,
+      setFormData(prev => ({
+        ...prev,
         socialMedia: {
-          ...formData.socialMedia,
+          ...prev.socialMedia,
           [socialPlatform]: value
         }
-      });
+      }));
     } else if (name === 'grayNiches') {
       const updatedNiches = checked 
         ? [...formData.grayNiches, value]
         : formData.grayNiches.filter(niche => niche !== value);
-      setFormData({ ...formData, grayNiches: updatedNiches });
+      setFormData(prev => ({ ...prev, grayNiches: updatedNiches }));
     } else if (type === 'checkbox') {
-      setFormData({ ...formData, [name]: checked });
+      setFormData(prev => ({ ...prev, [name]: checked }));
     } else {
-      setFormData({ ...formData, [name]: value });
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
   // Website verification using API
   const verifyWebsite = async (url) => {
-    if (!url) return;
+    if (!url || url.length < 8) {
+      setWebsiteVerification({});
+      return;
+    }
     
     setLoading(true);
     try {
       const encodedUrl = encodeURIComponent(url);
       const response = await apiCall(`/publisher-requests/verify-website/${encodedUrl}`);
       setWebsiteVerification(response);
+      console.log('Website verified:', response);
     } catch (error) {
       console.error('Website verification failed:', error);
       setWebsiteVerification({
         isAccessible: false,
         title: "Verification Failed",
+        description: error.message,
         hasAnalytics: false
       });
     } finally {
@@ -207,8 +291,23 @@ const SimplePublisherDashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
+    setSuccess("");
     
     try {
+      // Basic validation
+      if (!formData.publisherName || !formData.email || !formData.companyName || 
+          !formData.website || !formData.category || !formData.audienceSize) {
+        throw new Error("Please fill in all required fields");
+      }
+
+      // Validate website URL
+      try {
+        new URL(formData.website);
+      } catch {
+        throw new Error("Please enter a valid website URL");
+      }
+
       // Prepare data for API
       const requestData = {
         fullName: formData.publisherName,
@@ -244,20 +343,15 @@ const SimplePublisherDashboard = () => {
         }
       };
 
+      console.log('Submitting request data:', requestData);
+
       // Create new publisher request via API
       const response = await apiCall('/publisher-requests/create', 'POST', requestData);
       
-      // Show success message
-      alert(`Publisher Request Submitted Successfully!
+      console.log('Request submitted successfully:', response);
       
-${response.message}
-
-Analytics Summary:
-• Monthly Traffic: ${formatNumber(response.websiteAnalysis?.estimatedMonthlyVisitors || 0)}
-• Trust Score: ${response.websiteAnalysis?.trustScore || 0}/100
-• Website Status: ${response.websiteAnalysis?.trafficFound ? 'Verified' : 'Pending Verification'}
-
-Your request has been submitted and is awaiting admin approval.`);
+      // Show success message
+      setSuccess(`Publisher Request Submitted Successfully! ${response.message || ''}`);
       
       // Reset form (but keep user details)
       setFormData({
@@ -294,9 +388,10 @@ Your request has been submitted and is awaiting admin approval.`);
       // Reload requests and switch to requests tab
       await loadUserRequests();
       setActiveTab("requests");
+      
     } catch (error) {
       console.error('Submit error:', error);
-      alert(`Failed to submit request: ${error.message}`);
+      setError(`Failed to submit request: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -304,7 +399,10 @@ Your request has been submitted and is awaiting admin approval.`);
 
   // Re-analyze website using API
   const reAnalyzeWebsite = async (requestId) => {
+    if (!requestId) return;
+    
     setLoading(true);
+    setError("");
     
     try {
       await apiCall(`/publisher-requests/analyze-website/${requestId}`, 'POST', {
@@ -313,10 +411,11 @@ Your request has been submitted and is awaiting admin approval.`);
       
       // Reload requests
       await loadUserRequests();
-      alert("Website re-analyzed successfully!");
+      setSuccess("Website re-analyzed successfully!");
+      
     } catch (error) {
       console.error('Re-analyze error:', error);
-      alert(`Failed to re-analyze website: ${error.message}`);
+      setError(`Failed to re-analyze website: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -324,20 +423,23 @@ Your request has been submitted and is awaiting admin approval.`);
 
   // Delete request via API
   const deleteRequest = async (requestId) => {
-    if (!window.confirm("Are you sure you want to delete this request?")) {
+    if (!requestId || !window.confirm("Are you sure you want to delete this request?")) {
       return;
     }
 
     try {
       setLoading(true);
+      setError("");
+      
       await apiCall(`/publisher-requests/${requestId}`, 'DELETE');
       
       // Reload requests
       await loadUserRequests();
-      alert("Request deleted successfully!");
+      setSuccess("Request deleted successfully!");
+      
     } catch (error) {
       console.error('Delete error:', error);
-      alert(`Failed to delete request: ${error.message}`);
+      setError(`Failed to delete request: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -345,15 +447,17 @@ Your request has been submitted and is awaiting admin approval.`);
 
   // Format number for display
   const formatNumber = (num) => {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num?.toString() || '0';
+    const number = parseInt(num) || 0;
+    if (number >= 1000000) return (number / 1000000).toFixed(1) + 'M';
+    if (number >= 1000) return (number / 1000).toFixed(1) + 'K';
+    return number.toString();
   };
 
   // Get trust level color
   const getTrustLevelColor = (score) => {
-    if (score >= 70) return 'text-green-600 bg-green-100';
-    if (score >= 50) return 'text-yellow-600 bg-yellow-100';
+    const trustScore = parseInt(score) || 0;
+    if (trustScore >= 70) return 'text-green-600 bg-green-100';
+    if (trustScore >= 50) return 'text-yellow-600 bg-yellow-100';
     return 'text-red-600 bg-red-100';
   };
 
@@ -362,9 +466,13 @@ Your request has been submitted and is awaiting admin approval.`);
     totalRequests: requests.length,
     pendingRequests: requests.filter(r => r.status === "pending").length,
     approvedRequests: requests.filter(r => r.status === "approved").length,
-    totalAudience: requests.reduce((sum, req) => sum + (req.analyticsSummary?.totalAudience || 0), 0),
+    totalAudience: requests.reduce((sum, req) => {
+      const audience = parseInt(req.audienceSize) || 0;
+      const traffic = parseInt(req.websiteAnalysis?.monthlyTraffic) || 0;
+      return sum + audience + traffic;
+    }, 0),
     avgTrustScore: requests.length > 0 ? 
-      Math.round(requests.reduce((sum, req) => sum + (req.websiteAnalysis?.trustScore || 0), 0) / requests.length) : 0,
+      Math.round(requests.reduce((sum, req) => sum + (parseInt(req.websiteAnalysis?.trustScore) || 0), 0) / requests.length) : 0,
     avgPrice: requests.length > 0 ?
       Math.round(requests.reduce((sum, req) => sum + (parseFloat(req.pricing?.standardPostPrice) || 0), 0) / requests.length) : 0
   };
@@ -382,6 +490,25 @@ Your request has been submitted and is awaiting admin approval.`);
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md">
+          <div className="flex justify-between items-center">
+            <span>{error}</span>
+            <button onClick={() => setError("")} className="ml-4 text-white hover:text-gray-200">×</button>
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md">
+          <div className="flex justify-between items-center">
+            <span>{success}</span>
+            <button onClick={() => setSuccess("")} className="ml-4 text-white hover:text-gray-200">×</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-blue-600 text-white py-4 px-6 shadow">
         <div className="flex justify-between items-center">
@@ -477,7 +604,9 @@ Your request has been submitted and is awaiting admin approval.`);
                       required
                     />
                     {websiteVerification.isAccessible === false && (
-                      <p className="text-red-500 text-xs mt-1">Website not accessible</p>
+                      <p className="text-red-500 text-xs mt-1">
+                        {websiteVerification.description || "Website not accessible"}
+                      </p>
                     )}
                     {websiteVerification.isAccessible === true && (
                       <p className="text-green-500 text-xs mt-1">Website verified</p>
@@ -856,7 +985,14 @@ Your request has been submitted and is awaiting admin approval.`);
             <div className="bg-white shadow rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">Your Publisher Requests</h2>
 
-              {requests.length === 0 ? (
+              {loading && (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p>Loading your requests...</p>
+                </div>
+              )}
+
+              {!loading && requests.length === 0 && (
                 <div className="text-center py-8">
                   <div className="text-gray-400 text-6xl mb-4">📝</div>
                   <p className="text-gray-600 mb-4">No requests submitted yet</p>
@@ -867,11 +1003,13 @@ Your request has been submitted and is awaiting admin approval.`);
                     Submit Your First Request
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {!loading && requests.length > 0 && (
                 <div className="space-y-6">
                   {requests.map((req) => (
                     <div
-                      key={req.id || req._id}
+                      key={req._id || req.id}
                       className="border rounded-lg bg-gray-50 shadow-sm hover:shadow-md transition"
                     >
                       {/* Request Header */}
@@ -885,7 +1023,9 @@ Your request has been submitted and is awaiting admin approval.`);
                                 {req.category}
                               </span>
                               <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                                {req.pricing ? `${req.pricing.standardPostPrice}${req.pricing.grayNichePrice !== req.pricing.standardPostPrice ? ` - ${req.pricing.grayNichePrice}` : ''}` : req.analyticsSummary?.priceRange || 'N/A'}
+                                ${req.pricing?.standardPostPrice || 0}
+                                {req.pricing?.grayNichePrice && req.pricing.grayNichePrice !== req.pricing.standardPostPrice ? 
+                                  ` - ${req.pricing.grayNichePrice}` : ''}
                               </span>
                             </div>
                           </div>
@@ -896,18 +1036,20 @@ Your request has been submitted and is awaiting admin approval.`);
                                   ? "bg-green-100 text-green-800"
                                   : req.status === "rejected"
                                   ? "bg-red-100 text-red-800"
+                                  : req.status === "under_review"
+                                  ? "bg-blue-100 text-blue-800"
                                   : "bg-yellow-100 text-yellow-800"
                               }`}
                             >
-                              {req.status.toUpperCase()}
+                              {req.status === "under_review" ? "UNDER REVIEW" : req.status.toUpperCase()}
                             </span>
                             {(req.status === 'pending' || req.status === 'rejected') && (
                               <button
-                                onClick={() => deleteRequest(req.id || req._id)}
-                                className="text-red-600 hover:text-red-800 text-sm"
+                                onClick={() => deleteRequest(req._id || req.id)}
+                                className="text-red-600 hover:text-red-800 text-sm px-2 py-1 hover:bg-red-50 rounded"
                                 title="Delete Request"
                               >
-                                🗑️
+                                Delete
                               </button>
                             )}
                           </div>
@@ -936,6 +1078,20 @@ Your request has been submitted and is awaiting admin approval.`);
                             <span className="font-medium">Audience:</span> {formatNumber(req.audienceSize)}
                           </div>
                         </div>
+
+                        {req.rejectionReason && (
+                          <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                            <p className="text-sm font-medium text-red-800">Rejection Reason:</p>
+                            <p className="text-sm text-red-700">{req.rejectionReason}</p>
+                          </div>
+                        )}
+
+                        {req.adminNotes && (
+                          <div className="mt-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                            <p className="text-sm font-medium text-blue-800">Admin Notes:</p>
+                            <p className="text-sm text-blue-700">{req.adminNotes}</p>
+                          </div>
+                        )}
                       </div>
 
                       {/* Analytics Section */}
@@ -967,7 +1123,11 @@ Your request has been submitted and is awaiting admin approval.`);
                             </div>
                             <div className="text-center bg-white p-3 rounded-lg shadow-sm">
                               <p className="text-lg font-bold text-purple-600">
-                                {Object.keys(req.websiteAnalysis.socialMedia || {}).filter(key => req.websiteAnalysis.socialMedia[key]?.url).length}
+                                {Object.keys(req.websiteAnalysis.socialMedia || {}).filter(key => 
+                                  req.websiteAnalysis.socialMedia[key]?.url || 
+                                  req.websiteAnalysis.socialMedia[key]?.followers || 
+                                  req.websiteAnalysis.socialMedia[key]?.subscribers
+                                ).length}
                               </p>
                               <p className="text-xs text-gray-600">Social Platforms</p>
                             </div>
@@ -976,14 +1136,14 @@ Your request has been submitted and is awaiting admin approval.`);
                           {/* Action Buttons */}
                           <div className="flex justify-between items-center">
                             <p className="text-xs text-gray-500">
-                              Last analyzed: {new Date(req.websiteAnalysis.lastAnalyzed).toLocaleDateString()}
+                              Last analyzed: {new Date(req.websiteAnalysis.lastAnalyzed || req.updatedAt).toLocaleDateString()}
                             </p>
                             <button
-                              onClick={() => reAnalyzeWebsite(req.id || req._id)}
+                              onClick={() => reAnalyzeWebsite(req._id || req.id)}
                               disabled={loading}
                               className="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:bg-blue-300 transition"
                             >
-                              Re-analyze Website
+                              {loading ? "Analyzing..." : "Re-analyze Website"}
                             </button>
                           </div>
                         </div>
@@ -1069,7 +1229,7 @@ Your request has been submitted and is awaiting admin approval.`);
                         <div className="w-full bg-gray-300 rounded-full h-2">
                           <div 
                             className="h-2 bg-blue-500 rounded-full transition-all duration-500"
-                            style={{ width: `${stats.avgTrustScore}%` }}
+                            style={{ width: `${Math.min(stats.avgTrustScore, 100)}%` }}
                           />
                         </div>
                       </div>
@@ -1080,7 +1240,7 @@ Your request has been submitted and is awaiting admin approval.`);
                     <h3 className="font-semibold mb-4">Recent Activity</h3>
                     <div className="space-y-3">
                       {requests.slice(0, 3).map((req) => (
-                        <div key={req.id || req._id} className="flex justify-between items-center bg-white p-3 rounded-lg">
+                        <div key={req._id || req.id} className="flex justify-between items-center bg-white p-3 rounded-lg">
                           <div>
                             <p className="font-medium text-sm">{req.companyName}</p>
                             <p className="text-xs text-gray-600">
@@ -1099,13 +1259,12 @@ Your request has been submitted and is awaiting admin approval.`);
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-medium text-green-600">
-                              {req.pricing ? 
-                                `${req.pricing.standardPostPrice}${req.pricing.grayNichePrice !== req.pricing.standardPostPrice ? ` - ${req.pricing.grayNichePrice}` : ''}` :
-                                'Price not set'
-                              }
+                              ${req.pricing?.standardPostPrice || 0}
+                              {req.pricing?.grayNichePrice && req.pricing.grayNichePrice !== req.pricing.standardPostPrice ? 
+                                ` - ${req.pricing.grayNichePrice}` : ''}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {formatNumber(req.analyticsSummary?.totalAudience || 0)} audience
+                              {formatNumber(req.audienceSize || 0)} audience
                             </p>
                             <p className="text-xs text-gray-500">
                               DA: {req.domainAuthority || req.websiteAnalysis?.domainAuthority || 'N/A'}
@@ -1120,9 +1279,6 @@ Your request has been submitted and is awaiting admin approval.`);
                         >
                           View all {requests.length} requests →
                         </button>
-                      )}
-                      {requests.length === 0 && (
-                        <p className="text-gray-500 text-sm">No recent activity</p>
                       )}
                     </div>
                   </div>
