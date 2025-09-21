@@ -9,7 +9,9 @@ import {
   FileText,
   BarChart3,
   Search,
-  Filter
+  Filter,
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
 
 const AdminDashboard = () => {
@@ -23,9 +25,12 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dashboardStats, setDashboardStats] = useState({});
+  const [error, setError] = useState("");
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // Get API base URL
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  // Get API base URL with fallback
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://event-backend-eu68.vercel.app/api';
 
   // Check authentication and load data
   useEffect(() => {
@@ -33,55 +38,155 @@ const AdminDashboard = () => {
     const userData = localStorage.getItem("user");
     
     if (!token || !userData) {
-      alert("Please login first");
+      setError("Please login first");
       return;
     }
 
-    const user = JSON.parse(userData);
-    
-    if (user.role !== "admin") {
-      alert("Access denied: Admin account required");
-      return;
-    }
+    try {
+      const user = JSON.parse(userData);
+      
+      if (user.role !== "admin") {
+        setError("Access denied: Admin account required");
+        return;
+      }
 
-    setCurrentUser(user);
-    loadDashboardData();
+      setCurrentUser(user);
+      loadDashboardData();
+
+      // Auto refresh when window gets focus (user comes back to tab)
+      const handleFocus = () => {
+        console.log('Window focused, refreshing data...');
+        loadDashboardData();
+      };
+
+      window.addEventListener('focus', handleFocus);
+
+      // Auto refresh every 30 seconds if enabled
+      const interval = setInterval(() => {
+        if (autoRefresh) {
+          console.log('Auto-refreshing dashboard data...');
+          loadDashboardData();
+        }
+      }, 30000); // 30 seconds
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', handleFocus);
+      };
+    } catch (err) {
+      setError("Invalid user data. Please login again.");
+    }
   }, []);
+
+  // Test API connection first
+  const testAPIConnection = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      console.log('Testing API connection to:', `${API_BASE_URL}/admin/`);
+      console.log('Token exists:', !!token);
+      
+      const response = await fetch(`${API_BASE_URL}/admin/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('API Response Status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('API Response Data:', data);
+        return true;
+      } else {
+        const errorData = await response.text();
+        console.error('API Error:', errorData);
+        return false;
+      }
+    } catch (error) {
+      console.error('API Connection Error:', error);
+      return false;
+    }
+  };
 
   // Load dashboard stats and requests from API
   const loadDashboardData = async () => {
     setLoading(true);
+    setError("");
+    
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      console.log('Loading dashboard data from:', API_BASE_URL);
+
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       };
 
-      // Load dashboard stats
-      const statsResponse = await fetch(`${API_BASE_URL}/admin/dashboard-stats`, {
-        headers
-      });
-      
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setDashboardStats(statsData);
+      // Test API connection first
+      const apiWorking = await testAPIConnection();
+      if (!apiWorking) {
+        throw new Error("Admin API is not accessible. Please check your server.");
       }
 
-      // Load publisher requests
+      // Try to load dashboard stats (optional)
+      try {
+        console.log('Fetching dashboard stats...');
+        const statsResponse = await fetch(`${API_BASE_URL}/admin/dashboard-stats`, {
+          headers
+        });
+        
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          console.log('Dashboard stats loaded:', statsData);
+          setDashboardStats(statsData);
+        } else {
+          console.warn('Dashboard stats failed:', statsResponse.status);
+        }
+      } catch (statsError) {
+        console.warn('Dashboard stats error:', statsError);
+      }
+
+      // Load publisher requests (required)
+      console.log('Fetching publisher requests...');
       const requestsResponse = await fetch(`${API_BASE_URL}/admin/publisher-requests?limit=100`, {
         headers
       });
       
       if (requestsResponse.ok) {
         const requestsData = await requestsResponse.json();
+        console.log('Publisher requests loaded:', requestsData);
         setPublisherRequests(requestsData.requests || []);
+        setLastUpdate(new Date());
+      } else if (requestsResponse.status === 404) {
+        // If endpoint doesn't exist, try alternative approach
+        console.log('Admin endpoint not found, trying alternative...');
+        setPublisherRequests([]);
+        setError("Admin endpoints not configured. Please check your server setup.");
       } else {
-        throw new Error('Failed to load requests');
+        throw new Error(`Failed to load requests: ${requestsResponse.status}`);
       }
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      alert("Failed to load dashboard data. Please check your connection.");
+      setError(`Failed to load dashboard data: ${error.message}`);
+      
+      // Fallback to localStorage for testing
+      console.log('Falling back to localStorage...');
+      try {
+        const localRequests = JSON.parse(localStorage.getItem("all_publisher_requests") || "[]");
+        if (localRequests.length > 0) {
+          setPublisherRequests(localRequests);
+          setError("Using local data. Server connection failed.");
+        }
+      } catch (localError) {
+        console.error('LocalStorage fallback failed:', localError);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +196,9 @@ const AdminDashboard = () => {
   const approveRequest = async (requestId) => {
     try {
       const token = localStorage.getItem("token");
+      
+      console.log('Approving request:', requestId);
+      
       const response = await fetch(`${API_BASE_URL}/admin/publisher-requests/${requestId}/approve`, {
         method: 'PUT',
         headers: {
@@ -105,15 +213,17 @@ const AdminDashboard = () => {
       if (response.ok) {
         alert("Publisher request approved successfully!");
         setShowModal(false);
-        // Reload data to get updated status
         loadDashboardData();
       } else {
-        const error = await response.json();
-        alert(error.message || "Failed to approve request");
+        const errorData = await response.json();
+        alert(errorData.message || "Failed to approve request");
       }
     } catch (error) {
       console.error('Error approving request:', error);
-      alert("Failed to approve request");
+      alert("Failed to approve request: " + error.message);
+      
+      // Fallback to localStorage update
+      updateLocalStorage(requestId, "approved");
     }
   };
 
@@ -126,6 +236,7 @@ const AdminDashboard = () => {
 
     try {
       const token = localStorage.getItem("token");
+      
       const response = await fetch(`${API_BASE_URL}/admin/publisher-requests/${requestId}/reject`, {
         method: 'PUT',
         headers: {
@@ -142,15 +253,41 @@ const AdminDashboard = () => {
         alert("Publisher request rejected");
         setShowModal(false);
         setRejectionReason("");
-        // Reload data to get updated status
         loadDashboardData();
       } else {
-        const error = await response.json();
-        alert(error.message || "Failed to reject request");
+        const errorData = await response.json();
+        alert(errorData.message || "Failed to reject request");
       }
     } catch (error) {
       console.error('Error rejecting request:', error);
-      alert("Failed to reject request");
+      alert("Failed to reject request: " + error.message);
+      
+      // Fallback to localStorage update
+      updateLocalStorage(requestId, "rejected", rejectionReason);
+    }
+  };
+
+  // Fallback localStorage update
+  const updateLocalStorage = (requestId, status, reason = "") => {
+    try {
+      const updatedRequests = publisherRequests.map(req => 
+        (req.id || req._id) === requestId 
+          ? { 
+              ...req, 
+              status: status,
+              rejectionReason: reason,
+              reviewedBy: currentUser.id,
+              reviewedAt: new Date().toISOString()
+            }
+          : req
+      );
+      
+      localStorage.setItem("all_publisher_requests", JSON.stringify(updatedRequests));
+      setPublisherRequests(updatedRequests);
+      setShowModal(false);
+      setRejectionReason("");
+    } catch (error) {
+      console.error('LocalStorage update failed:', error);
     }
   };
 
@@ -196,6 +333,25 @@ const AdminDashboard = () => {
     totalTraffic: publisherRequests.reduce((sum, req) => sum + (req.websiteAnalysis?.monthlyTraffic || 0), 0)
   };
 
+  // Show error state
+  if (error && !currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-6">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -215,16 +371,34 @@ const AdminDashboard = () => {
           <div>
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
             <p className="text-red-200 text-sm">Welcome, {currentUser.fullName}</p>
+            {error && (
+              <p className="text-red-200 text-xs bg-red-700 px-2 py-1 rounded mt-1">
+                {error}
+              </p>
+            )}
           </div>
           <div className="flex items-center space-x-4">
             <div className="text-sm bg-red-700 px-3 py-1 rounded">
               {stats.pending} Pending Requests
             </div>
+            {lastUpdate && (
+              <div className="text-xs text-red-200">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+              </div>
+            )}
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`text-xs px-2 py-1 rounded ${autoRefresh ? 'bg-green-600' : 'bg-gray-600'}`}
+            >
+              Auto-refresh: {autoRefresh ? 'ON' : 'OFF'}
+            </button>
             <button
               onClick={loadDashboardData}
-              className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm"
+              disabled={loading}
+              className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm flex items-center space-x-1 disabled:opacity-50"
             >
-              Refresh Data
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </button>
           </div>
         </div>
@@ -280,6 +454,21 @@ const AdminDashboard = () => {
                 <p className="text-2xl font-bold text-purple-600">{formatNumber(stats.totalTraffic)}</p>
               </div>
               <BarChart3 className="h-8 w-8 text-purple-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* API Connection Status */}
+        <div className="bg-white rounded-lg shadow mb-6 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`}></div>
+              <span className="text-sm font-medium">
+                API Status: {error ? 'Disconnected' : 'Connected'}
+              </span>
+            </div>
+            <div className="text-sm text-gray-500">
+              Endpoint: {API_BASE_URL}/admin
             </div>
           </div>
         </div>
@@ -367,7 +556,7 @@ const AdminDashboard = () => {
             ) : (
               <div className="space-y-4">
                 {getRequestsByTab().map((request) => (
-                  <div key={request._id} className="border rounded-lg p-6 hover:shadow-md transition">
+                  <div key={request._id || request.id} className="border rounded-lg p-6 hover:shadow-md transition">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-4">
@@ -406,35 +595,6 @@ const AdminDashboard = () => {
                             <p className="text-sm text-gray-900">{request.category}</p>
                           </div>
                         </div>
-
-                        {request.websiteAnalysis && (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div className="bg-gray-50 p-3 rounded">
-                              <p className="text-xs text-gray-500">Monthly Traffic</p>
-                              <p className="font-semibold">
-                                {formatNumber(request.websiteAnalysis.monthlyTraffic || 0)}
-                              </p>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded">
-                              <p className="text-xs text-gray-500">Domain Authority</p>
-                              <p className="font-semibold">
-                                {request.domainAuthority || request.websiteAnalysis.domainAuthority || 'N/A'}
-                              </p>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded">
-                              <p className="text-xs text-gray-500">Trust Score</p>
-                              <p className="font-semibold">
-                                {request.websiteAnalysis.trustScore || 0}/100
-                              </p>
-                            </div>
-                            <div className="bg-gray-50 p-3 rounded">
-                              <p className="text-xs text-gray-500">Price</p>
-                              <p className="font-semibold text-green-600">
-                                ${request.pricing?.standardPostPrice || 'N/A'}
-                              </p>
-                            </div>
-                          </div>
-                        )}
 
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-500">
@@ -499,35 +659,15 @@ const AdminDashboard = () => {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold mb-3">Analytics Data</h3>
-                  {selectedRequest.websiteAnalysis && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-gray-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">Monthly Traffic</p>
-                        <p className="font-semibold">
-                          {formatNumber(selectedRequest.websiteAnalysis.monthlyTraffic || 0)}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">Domain Authority</p>
-                        <p className="font-semibold">
-                          {selectedRequest.domainAuthority || selectedRequest.websiteAnalysis.domainAuthority || 'N/A'}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">Trust Score</p>
-                        <p className="font-semibold">
-                          {selectedRequest.websiteAnalysis.trustScore || 0}/100
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded">
-                        <p className="text-xs text-gray-500">Standard Price</p>
-                        <p className="font-semibold text-green-600">
-                          ${selectedRequest.pricing?.standardPostPrice || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  <h3 className="font-semibold mb-3">Request Details</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Category:</span> {selectedRequest.category}</p>
+                    <p><span className="font-medium">Audience Size:</span> {formatNumber(selectedRequest.audienceSize)}</p>
+                    <p><span className="font-medium">Domain Authority:</span> {selectedRequest.domainAuthority || 'N/A'}</p>
+                    <p><span className="font-medium">Page Authority:</span> {selectedRequest.pageAuthority || 'N/A'}</p>
+                    <p><span className="font-medium">Monthly Traffic:</span> {formatNumber(selectedRequest.monthlyTrafficAhrefs || 0)}</p>
+                    <p><span className="font-medium">Standard Price:</span> ${selectedRequest.pricing?.standardPostPrice || 'N/A'}</p>
+                  </div>
                 </div>
               </div>
 
@@ -562,14 +702,14 @@ const AdminDashboard = () => {
                     
                     <div className="flex justify-end space-x-3">
                       <button
-                        onClick={() => rejectRequest(selectedRequest._id)}
+                        onClick={() => rejectRequest(selectedRequest._id || selectedRequest.id)}
                         disabled={!rejectionReason.trim()}
                         className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         Reject Request
                       </button>
                       <button
-                        onClick={() => approveRequest(selectedRequest._id)}
+                        onClick={() => approveRequest(selectedRequest._id || selectedRequest.id)}
                         className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700"
                       >
                         Approve Request
