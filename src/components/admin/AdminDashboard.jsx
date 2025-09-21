@@ -8,7 +8,6 @@ import {
   Eye,
   FileText,
   BarChart3,
-  LogOut,
   Search,
   Filter
 } from "lucide-react";
@@ -59,12 +58,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    window.location.reload();
-  };
+ 
 
   // Approve request
   const approveRequest = async (requestId) => {
@@ -185,13 +179,7 @@ const AdminDashboard = () => {
             <div className="text-sm bg-red-700 px-3 py-1 rounded">
               {stats.pending} Pending Requests
             </div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-400 px-4 py-2 rounded text-sm transition flex items-center space-x-2"
-            >
-              <LogOut size={16} />
-              <span>Logout</span>
-            </button>
+          
           </div>
         </div>
       </header>
